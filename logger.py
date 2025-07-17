@@ -13,7 +13,7 @@ def setup_logger(log_level=logging.INFO, log_file=None):
     """
     # Create logs directory if it doesn't exist
     if log_file is None:
-        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+        log_dir = 'logs'
         os.makedirs(log_dir, exist_ok=True)
     
         # Create log file with timestamp

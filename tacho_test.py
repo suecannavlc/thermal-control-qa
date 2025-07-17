@@ -1,4 +1,6 @@
 import time
+import os
+from datetime import datetime
 
 from hw_fault_simulation import set_pwm_duty_cycle, get_tacho_reading, \
     reset_all_faults, simulate_fan_stall, simulate_fan_degradation, \
@@ -7,9 +9,10 @@ from hw_fault_simulation import set_pwm_duty_cycle, get_tacho_reading, \
 
 
 from logger import get_logger
+from csv_logger import CsvLogger
 import logging
 
-logger = get_logger(log_level=logging.DEBUG)
+logger = get_logger(log_level=logging.INFO)
 
 # Default test configuration
 PWM_CHANNEL = 0
@@ -23,7 +26,8 @@ def validate_pwm_vs_tacho(
         expected_rpm: int,
         tolerance_percent: int = RPM_TOLERANCE_PERCENT,
         stabilization_time: float = PWM_STABILIZATION_TIME,
-        number_samples: int = NUM_SAMPLES
+        number_samples: int = NUM_SAMPLES,
+        csv_logger=None
 ) -> dict:
     """
     Validates the relationship between PWM setting and tachometer reading.
@@ -40,18 +44,32 @@ def validate_pwm_vs_tacho(
     :param expected_rpm: The expected RPM
 
     """
-    logger.info("\nValidating PWM vs Tachometer")
     # Validate test parameters before executing any step.
     if pwm_value < 0 or pwm_value > 100:
-        return {"result": "FAIL", "error_message": "Invalid PWM value"}
+        result = {"result": "FAIL", "error_message": "Invalid PWM value", "pwm_value": pwm_value, "measured_rpm": None, "expected_rpm": expected_rpm}
+        if csv_logger:
+            csv_logger.log_row(pwm_value, expected_rpm, '', 'FAIL')
+        return result
     if expected_rpm is None or expected_rpm < 0:
-        return {"result": "FAIL", "error_message": "Invalid expected RPM"}
+        result = {"result": "FAIL", "error_message": "Invalid expected RPM", "pwm_value": pwm_value, "measured_rpm": None, "expected_rpm": expected_rpm}
+        if csv_logger:
+            csv_logger.log_row(pwm_value, expected_rpm, '', 'FAIL')
+        return result
     if tolerance_percent < 0 or tolerance_percent > 100:
-        return {"result": "FAIL", "error_message": "Invalid tolerance percentage"}
+        result = {"result": "FAIL", "error_message": "Invalid tolerance percentage", "pwm_value": pwm_value, "measured_rpm": None, "expected_rpm": expected_rpm}
+        if csv_logger:
+            csv_logger.log_row(pwm_value, expected_rpm, '', 'FAIL')
+        return result
     if stabilization_time < 0:
-        return {"result": "FAIL", "error_message": "Invalid stabilization time"}
+        result = {"result": "FAIL", "error_message": "Invalid stabilization time", "pwm_value": pwm_value, "measured_rpm": None, "expected_rpm": expected_rpm}
+        if csv_logger:
+            csv_logger.log_row(pwm_value, expected_rpm, '', 'FAIL')
+        return result
     if number_samples < 1:
-        return {"result": "FAIL", "error_message": "Invalid number of samples"}
+        result = {"result": "FAIL", "error_message": "Invalid number of samples", "pwm_value": pwm_value, "measured_rpm": None, "expected_rpm": expected_rpm}
+        if csv_logger:
+            csv_logger.log_row(pwm_value, expected_rpm, '', 'FAIL')
+        return result
     
     # Set PWM duty cycle
     set_pwm_duty_cycle(PWM_CHANNEL, pwm_value)
@@ -95,8 +113,6 @@ def validate_pwm_vs_tacho(
         else:
             results["result"] = "FAIL"
 
-    # Print results
-    logger.info(f"Result: {results['result']}, PWM: {pwm_value}%, Measured RPM: {measured_rpm}, Expected RPM: {expected_rpm}")
 
     return results
 
@@ -107,7 +123,8 @@ def run_validation_sweep(
         expected_rpm_map: dict[int, int],
         tolerance_percent: int = RPM_TOLERANCE_PERCENT,
         stabilization_time: float = PWM_STABILIZATION_TIME,
-        number_samples: int = NUM_SAMPLES
+        number_samples: int = NUM_SAMPLES,
+        csv_logger=None
 ) -> tuple[int, dict]:
     """
     Run validation across a range of PWM values.
@@ -123,23 +140,29 @@ def run_validation_sweep(
     results = {}
 
     logger.info("\n\nPWM-Tachometer Validation Sweep")
-    logger.info("===============================")
+    logger.info("\n===============================")
 
     for pwm in range(pwm_min, pwm_max + 1, pwm_step):
         try:
             expected_rpm = expected_rpm_map.get(pwm)
         except KeyError:
-            results[pwm] = {"result": "FAIL",
-                            "error_message": [f"Invalid expected RPM: {pwm}"]}
-            
-        result = validate_pwm_vs_tacho(
-            pwm_value=pwm,
-            expected_rpm=expected_rpm,
-            tolerance_percent=tolerance_percent,
-            stabilization_time=stabilization_time,
-            number_samples=number_samples
-        )
-        results[pwm] = result
+            logger.error(f"Invalid expected RPM for PWM {pwm}%. Expected RPM map: {expected_rpm_map}")
+            results[pwm] = {"result": "FAIL", "error_message": [f"Invalid expected RPM: {pwm}"]}
+        else:
+            result = validate_pwm_vs_tacho(
+                pwm_value=pwm,
+                expected_rpm=expected_rpm,
+                tolerance_percent=tolerance_percent,
+                stabilization_time=stabilization_time,
+                number_samples=number_samples,
+                csv_logger=csv_logger
+            )
+            results[pwm] = result
+
+        # Print results
+        logger.info(f"Result: {result['result']}, PWM: {pwm}%, Measured RPM: {result['measured_rpm']}, Expected RPM: {expected_rpm}")
+        if csv_logger:
+            csv_logger.log_row(pwm, expected_rpm, result['measured_rpm'], result["result"])
 
         if result["result"] == "FAIL":
             failures += 1
@@ -165,15 +188,21 @@ if __name__ == "__main__":
     reset_all_faults()
 
     # simulate_disconnected_pwm()
-    #simulate_disconnected_tacho()
-    #simulate_fan_degradation()
-    #simulate_fan_stall()
-    #set_tacho_noise_level()
+    # simulate_disconnected_tacho()
+    # simulate_fan_degradation(0.12)  # Simulate 12% degradation
+    # simulate_fan_stall()  # Ensure fan stall is disabled
+    set_tacho_noise_level(0.12)  # Set noise level to 5%
+
+    # CSV setup
+    # Keep the CSV logger outside to enable mocking
+    csv_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csv_logs')
+    csv_logger = CsvLogger(csv_dir)
 
     # Run full test
     failures, results = run_validation_sweep(
         pwm_min=0,
         pwm_max=100,
         pwm_step=20,
-        expected_rpm_map=pwm_tacho_map
+        expected_rpm_map=pwm_tacho_map,
+        csv_logger=csv_logger
     )

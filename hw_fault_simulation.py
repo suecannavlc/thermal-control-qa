@@ -7,7 +7,7 @@ import random
 from logger import get_logger
 import logging
 
-logger = get_logger(log_level=logging.DEBUG)
+logger = get_logger(log_level=logging.INFO)
 
 _current_pwm = 0
 
@@ -46,7 +46,7 @@ def get_tacho_reading(channel: int) -> int:
 
     # If the fan is stalled or the tacho is disconnected return 0
     if _fan_stall_enabled or _tacho_disconnected:
-        logger.error(f"[FAULT] Fan stalled or tachometer disconnected")
+        logger.debug(f"[FAULT][SIMULATED] Fan stalled or tachometer disconnected")
         return 0
     
     base_rpm = _get_tacho_reading(channel=channel)
@@ -59,7 +59,7 @@ def get_tacho_reading(channel: int) -> int:
     # Apply noise
     std_dev = base_rpm * _noise_level
     noise = random.gauss(0, std_dev)
-    logger.debug(f"Noise: {noise}")
+    logger.debug(f"[FAULT][SIMULATED] Noise: {noise}")
 
     return max(0, int(base_rpm + noise))
 
@@ -70,7 +70,7 @@ def set_pwm_duty_cycle(channel: int, duty_cycle: int) -> None:
     global _current_pwm
 
     if _pwm_disconnected:
-        logger.error(f"[FAULT] PWM signal disconnected")
+        logger.debug(f"[FAULT][SIMULATED] PWM signal disconnected")
         return
     
     _set_pwm_duty_cycle(channel=channel, duty_cycle=duty_cycle)

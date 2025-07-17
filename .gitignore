@@ -1,0 +1,7 @@
+.venv
+logs/
+csv_logs/
+*.pyc
+__pycache__/*
+__pycache__/hw_fault_simulation.cpython-312.pyc
+__pycache__/logger.cpython-312.pyc
