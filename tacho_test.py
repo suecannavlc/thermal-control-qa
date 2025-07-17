@@ -5,6 +5,12 @@ from hw_fault_simulation import set_pwm_duty_cycle, get_tacho_reading, \
     simulate_disconnected_tacho, simulate_disconnected_pwm, \
     set_tacho_noise_level
 
+
+from logger import get_logger
+import logging
+
+logger = get_logger(log_level=logging.DEBUG)
+
 # Default test configuration
 PWM_CHANNEL = 0
 TACHO_CHANNEL = 0
@@ -34,7 +40,7 @@ def validate_pwm_vs_tacho(
     :param expected_rpm: The expected RPM
 
     """
-    print("\nValidating PWM vs Tachometer")
+    logger.info("\nValidating PWM vs Tachometer")
     # Validate test parameters before executing any step.
     if pwm_value < 0 or pwm_value > 100:
         return {"result": "FAIL", "error_message": "Invalid PWM value"}
@@ -51,12 +57,13 @@ def validate_pwm_vs_tacho(
     set_pwm_duty_cycle(PWM_CHANNEL, pwm_value)
 
     # Wait for fan speed to stabilize
-    print(f"Waiting {stabilization_time}s for fan speed to stabilize...")
+    logger.debug(f"Waiting {stabilization_time}s for fan speed to stabilize...")
     time.sleep(stabilization_time)
 
     # Take multiple RPM measurements and average them
     rpm_readings = []
-    for _ in range(number_samples):
+    for i in range(number_samples):
+        logger.debug(f"Reading tachometer - Sample {i + 1}...")
         rpm_readings.append(get_tacho_reading(TACHO_CHANNEL))
         time.sleep(0.1)  # Short delay between readings
 
@@ -78,7 +85,7 @@ def validate_pwm_vs_tacho(
         results["result"] = "FAIL"
         msg = f"ERROR: Fan stall detected at PWM {pwm_value}%"
         results["error_message"].append(msg)
-        print(msg)
+        logger.error(msg)
 
     # Avoid division by 0
     if expected_rpm > 0:
@@ -89,7 +96,7 @@ def validate_pwm_vs_tacho(
             results["result"] = "FAIL"
 
     # Print results
-    print(f"Result: {results['result']}, PWM: {pwm_value}%, Measured RPM: {measured_rpm}, Expected RPM: {expected_rpm}")
+    logger.info(f"Result: {results['result']}, PWM: {pwm_value}%, Measured RPM: {measured_rpm}, Expected RPM: {expected_rpm}")
 
     return results
 
@@ -115,8 +122,8 @@ def run_validation_sweep(
     failures = 0
     results = {}
 
-    print("\n\nPWM-Tachometer Validation Sweep")
-    print("===============================")
+    logger.info("\n\nPWM-Tachometer Validation Sweep")
+    logger.info("===============================")
 
     for pwm in range(pwm_min, pwm_max + 1, pwm_step):
         try:
@@ -137,8 +144,8 @@ def run_validation_sweep(
         if result["result"] == "FAIL":
             failures += 1
 
-    print("===============================")
-    print(f"Test complete: {failures} failures")
+    logger.info("===============================")
+    logger.info(f"Test complete: {failures} failures")
 
     return failures, results
 
@@ -157,7 +164,7 @@ if __name__ == "__main__":
     # Reset all faults
     reset_all_faults()
 
-    simulate_disconnected_pwm()
+    # simulate_disconnected_pwm()
     #simulate_disconnected_tacho()
     #simulate_fan_degradation()
     #simulate_fan_stall()
