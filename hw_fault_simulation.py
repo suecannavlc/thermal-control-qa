@@ -129,7 +129,7 @@ def reset_all_faults() -> None:
     Reset all faults
     """
     global _fan_stall_enabled, _fan_degradation, _tacho_disconnected
-    global _pwm_disconnectedç, _noise_level
+    global _pwm_disconnected, _noise_level
 
     _fan_stall_enabled = False
     _fan_degradation = 0.0
